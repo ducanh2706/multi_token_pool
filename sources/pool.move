@@ -46,9 +46,7 @@ module pool_addr::Multi_Token_Pool {
         transfer_ref: TransferRef,
         burn_ref: BurnRef,
     }
-
-    // =============================== Entry Function =====================================
-
+    
     // todo: sender or admin?
     fun init_module(sender: &signer) {
         let token_list = TokenList {
@@ -107,6 +105,8 @@ module pool_addr::Multi_Token_Pool {
             }
         );
     }
+
+    // =============================== Entry Function =====================================
 
     // mint and push LP Token to owner
     public entry fun finalize(sender: &signer) acquires ManagedFungibleAsset  {
