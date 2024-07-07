@@ -631,6 +631,13 @@ module pool_addr::Multi_Token_Pool {
     //     pool_amount_in
     // }
 
+    #[view]
+    public fun get_lpt_address(): address acquires LST {
+        let lpt_name = string::utf8(b"LP Token");
+        let lpt_symbol = string::utf8(b"LPT");
+        get_fa_obj_address(lpt_name, lpt_symbol)
+    }
+
     #[view] 
     public fun get_total_supply_lpt(): u64 acquires LST {
         let lpt_name = string::utf8(b"LP Token");
