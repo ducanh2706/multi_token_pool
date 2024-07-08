@@ -1,4 +1,4 @@
-module lst_addr::Liquid_Staking_Token {
+module lst_deployed_addr::Liquid_Staking_Token {
     use std::signer;
     use std::vector;
     use std::debug::print;
@@ -121,6 +121,11 @@ module lst_addr::Liquid_Staking_Token {
         } else {
             0
         }
+    }
+
+    #[view]
+    public fun get_token_address(name: String, symbol: String): address acquires LST {
+        get_fa_obj_address(name, symbol)
     }
 
     // ========================================= Helper Function ========================================
