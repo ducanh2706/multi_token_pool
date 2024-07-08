@@ -10,9 +10,14 @@ module pool_addr::Multi_Token_Pool {
     use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata, FungibleAsset};
     use aptos_framework::object::{Self, Object, ExtendRef};
     use aptos_framework::primary_fungible_store;
+    use pool_math_addr::Pool_Math;
 
     const ERR_LIMIT_IN:u64 = 0;
     const ERR_TEST: u64 = 101;
+    const ERR_BAD_LIMIT_PRICE:u64 = 1;
+    const ERR_LIMIT_OUT:u64 = 2;
+    const ERR_MATH_APPROX:u64 = 3;
+    const ERR_LIMIT_PRICE:u64 = 4;
 
     const INIT_POOL_SUPPLY: u64 = 100;
     const BONE: u64 = 1000000;
@@ -51,7 +56,6 @@ module pool_addr::Multi_Token_Pool {
         burn_ref: BurnRef,
     }
     
-    // todo: sender or admin?
     fun init_module(sender: &signer) acquires LST {
         let token_list = TokenList {
             token_list: vector::empty(),
@@ -81,10 +85,11 @@ module pool_addr::Multi_Token_Pool {
         let decimals = 6;
         let icon_uri = string::utf8(b"http://example.com/favicon.ico");
         let project_uri = string::utf8(b"http://example.com");
-        create_fa(name, symbol, decimals, icon_uri, project_uri);
+        create_fa(sender, name, symbol, decimals, icon_uri, project_uri);
     }
 
     public entry fun create_fa(
+        sender: &signer,
         name: String,
         symbol: String,
         decimals: u8,
@@ -209,12 +214,6 @@ module pool_addr::Multi_Token_Pool {
         record.balance = 0;
         record.index = 0;
         record.denorm = 0;
-
-        // Temporarily release the mutable borrow of record
-        let record_ound = record.bound;
-        let record_balance = record.bound;
-        let record_index = record.index;
-        let record_denorm = record.denorm;
  
         let record_index = simple_map::borrow_mut<address, Record>(&mut token_record.records, address_index);
         record_index.index = index;
@@ -223,47 +222,31 @@ module pool_addr::Multi_Token_Pool {
         push_underlying(sender, token_balance, name, symbol);
     }
 
-    // public entry fun swap_exact_amount_in(
-    //     sender: &signer,
-    //     seed_token_in: vector<u8>,
-    //     token_amount_in: u64,
-    //     seed_token_out: vector<u8>,
-    //     min_amount_out: u64,
-    //     max_price: u64,
-    // ) acquires TokenList, TokenRecord, PoolInfo {
-    //     let sender_addr = signer::address_of(sender);
-    //     let (token_amount_out, spot_price_after) = get_swap_exact_amount_in(
-    //         sender_addr,
-    //         seed_token_in,
-    //         token_amount_in,
-    //         seed_token_out,
-    //         min_amount_out,
-    //         max_price,
-    //     );
-    //     pull_underlying(sender, token_amount_in, seed_token_in);
-    //     push_underlying(sender, token_amount_out, seed_token_out);
-    // }
+    public entry fun swap_exact_amount_in(
+        sender: &signer,
+        token_in_name: String,
+        token_in_symbol: String,
+        token_amount_in: u64,
+        token_out_name: String,
+        token_out_symbol: String,
+        token_amount_out: u64,
+    ) acquires LST, ManagedFungibleAsset {
+        pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol);
+        push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
+    }
 
-    // public entry fun swap_exact_amount_out(
-    //     sender: &signer,
-    //     seed_token_in: vector<u8>,
-    //     max_amount_in: u64,
-    //     seed_token_out: vector<u8>,
-    //     token_amount_out: u64,
-    //     max_price: u64,
-    // ) acquires TokenList, TokenRecord, PoolInfo {
-    //     let sender_addr = signer::address_of(sender);
-    //     let (token_amount_in, spot_price_after) = get_swap_exact_amount_out(
-    //         sender_addr,
-    //         seed_token_in,
-    //         max_amount_in,
-    //         seed_token_out,
-    //         token_amount_out,
-    //         max_price,
-    //     );
-    //     pull_underlying(sender, token_amount_in, seed_token_in);
-    //     push_underlying(sender, token_amount_out, seed_token_out);
-    // }
+    public entry fun swap_exact_amount_out(
+        sender: &signer,
+        token_in_name: String,
+        token_in_symbol: String,
+        token_amount_in: u64,
+        token_out_name: String,
+        token_out_symbol: String,
+        token_amount_out: u64,
+    ) acquires LST, ManagedFungibleAsset {
+        pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol);
+        push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
+    }
 
     // public entry fun join_swap_extern_amount_in (
     //     sender: &signer, 
@@ -426,107 +409,170 @@ module pool_addr::Multi_Token_Pool {
     }
     // ========================================= View Function ==========================================
 
-    // #[view]
-    // public fun get_swap_exact_amount_in(
-    //     sender_addr: address,
-    //     seed_token_in: vector<u8>,
-    //     token_amount_in: u64,
-    //     seed_token_out: vector<u8>,
-    //     min_amount_out: u64,
-    //     max_price: u64,
-    // ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo {
-    //     let token_record = borrow_global_mut<TokenRecord>(sender_addr);
-    //     let token_list = borrow_global_mut<TokenList>(sender_addr);
-    //     let pool_info = borrow_global_mut<PoolInfo>(sender_addr);
+    #[view]
+    public fun get_swap_exact_amount_in(
+        sender_addr: address,
+        token_in_name: String,
+        token_in_symbol: String,
+        token_amount_in: u64,
+        token_out_name: String,
+        token_out_symbol: String,
+        min_amount_out: u64,
+        max_price: u64,
+    ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo, LST {
+        let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
+        let token_list = borrow_global_mut<TokenList>(@pool_addr);
+        let pool_info = borrow_global_mut<PoolInfo>(@pool_addr);
 
-    //     let token_in_address = get_fa_obj_address(sender_addr, seed_token_in);
-    //     let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
-       
-    //     let token_out_address = get_fa_obj_address(sender_addr, seed_token_out);
-    //     let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
-    //     let spot_price_before = calc_spot_price(
-    //         record_token_in.balance,
-    //         record_token_in.denorm,
-    //         record_token_out.balance,
-    //         record_token_out.denorm,
-    //         pool_info.swap_fee,
-    //     );
-    //     assert!(spot_price_before <= max_price, ERR_BAD_LIMIT_PRICE);
+        let token_in_address = get_fa_obj_address(token_in_name, token_in_symbol);
+        let token_out_address = get_fa_obj_address(token_out_name, token_out_symbol);    
+        let (record_token_in_balance, record_token_in_denorm) = {
+            let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+            let record_token_in_balance = record_token_in.balance;
+            let record_token_in_denorm = record_token_in.denorm;
+            (record_token_in_balance, record_token_in_denorm)
+        };
 
-    //     let token_amount_out = calc_out_given_in(
-    //         record_token_in.balance,
-    //         record_token_in.denorm,
-    //         record_token_out.balance,
-    //         record_token_out.denorm,
-    //         token_amount_in,
-    //         pool_info.swap_fee,
-    //     );
-    //     assert!(token_amount_out >= min_amount_out, ERR_LIMIT_OUT);
+        let (record_token_out_balance, record_token_out_denorm) = {
+            let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
+            let record_token_out_balance = record_token_out.balance;
+            let record_token_out_denorm = record_token_out.denorm;
+            (record_token_out_balance, record_token_out_denorm)
+        };
         
-    //     record_token_in.balance = record_token_in.balance - token_amount_in;
-    //     record_token_out.balance = record_token_out.balance + token_amount_out;
+        let spot_price_before = Pool_Math::calc_spot_price (
+            record_token_in_balance,
+            record_token_in_denorm,
+            record_token_out_balance,
+            record_token_out_denorm,
+            pool_info.swap_fee,
+        );
+        assert!(spot_price_before <= max_price, ERR_BAD_LIMIT_PRICE);
 
-    //     let spot_price_after = calc_spot_price(
-    //         record_token_in.balance,
-    //         record_token_in.denorm,
-    //         record_token_out.balance,
-    //         record_token_out.denorm,
-    //         pool_info.swap_fee,
-    //     );
-    //     assert!(spot_price_after >= spot_price_after, ERR_MATH_APPROX);
-    //     assert!(spot_price_after <= max_price, ERR_LIMIT_PRICE);
-
-    //     (token_amount_out, spot_price_after)
-    // }
-
-    // #[view]
-    // public fun get_swap_exact_amount_out (
-    //     sender_addr: address,
-    //     seed_token_in: vector<u8>,
-    //     max_amount_in: u64,
-    //     seed_token_out: vector<u8>,
-    //     token_amount_out: u64,
-    //     max_price: u64,
-    // ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo {
-    //     let token_record = borrow_global_mut<TokenRecord>(sender_addr);
-    //     let token_list = borrow_global_mut<TokenList>(sender_addr);
-    //     let token_in_address = get_fa_obj_address(sender_addr, seed_token_in);
-    //     let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+        let token_amount_out = Pool_Math::calc_out_given_in(
+            record_token_in_balance,
+            record_token_in_denorm,
+            record_token_out_balance,
+            record_token_out_denorm,
+            token_amount_in,
+            pool_info.swap_fee,
+        );
+        assert!(token_amount_out >= min_amount_out, ERR_LIMIT_OUT);
+        {
+            let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+            record_token_in.balance = record_token_in.balance - token_amount_in;
+        };
        
-    //     let token_out_address = get_fa_obj_address(sender_addr, seed_token_out);
-    //     let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
-    //     let spot_price_before = calc_spot_price(
-    //         record_token_in.balance,
-    //         record_token_in.denorm,
-    //         record_token_out.balance,
-    //         record_token_out.denorm,
-    //         pool_info.swap_fee,
-    //     );
-    //     assert!(spot_price_before <= max_price, ERR_BAD_LIMIT_PRICE);
-    //     let token_amount_in = calc_in_given_out(
-    //         record_token_in.balance,
-    //         record_token_in.denorm,
-    //         record_token_out.balance,
-    //         record_token_out.denorm,
-    //         token_amount_out,
-    //         pool_info.swap_fee,
-    //     );
-    //     assert!(token_amount_in <= max_amount_in, ERR_LIMIT_IN);
+        {
+            let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
+            record_token_out.balance = record_token_out.balance + token_amount_out;
+        };
 
-    //     record_token_in.balance = record_token_in.balance - token_amount_in;
-    //     record_token_out.balance = record_token_out.balance + token_amount_out;
-    //     let spot_price_after = calc_spot_price(
-    //         record_token_in.balance,
-    //         record_token_in.denorm,
-    //         record_token_out.balance,
-    //         record_token_out.denorm,
-    //         pool_info.swap_fee,
-    //     );
-    //     assert!(spot_price_after >= spot_price_after, ERR_MATH_APPROX);
-    //     assert!(spot_price_after <= max_price, ERR_LIMIT_PRICE);
+        let (record_token_in_balance, record_token_in_denorm) = {
+            let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+            let record_token_in_balance = record_token_in.balance;
+            let record_token_in_denorm = record_token_in.denorm;
+            (record_token_in_balance, record_token_in_denorm)
+        };
 
-    //     (token_amount_in, spot_price_after)
-    // }
+        let (record_token_out_balance, record_token_out_denorm) = {
+            let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
+            let record_token_out_balance = record_token_out.balance;
+            let record_token_out_denorm = record_token_out.denorm;
+            (record_token_out_balance, record_token_out_denorm)
+        };
+        let spot_price_after = Pool_Math::calc_spot_price(
+            record_token_in_balance,
+            record_token_in_denorm,
+            record_token_out_balance,
+            record_token_out_denorm,
+            pool_info.swap_fee,
+        );
+        assert!(spot_price_after >= spot_price_after, ERR_MATH_APPROX);
+        assert!(spot_price_after <= max_price, ERR_LIMIT_PRICE);
+
+        (token_amount_out, spot_price_after)
+    }
+
+    #[view]
+    public fun get_swap_exact_amount_out (
+        sender_addr: address,
+        token_in_name: String,
+        token_in_symbol: String,
+        max_amount_in: u64,
+        token_out_name: String,
+        token_out_symbol: String,
+        token_amount_out: u64,
+        max_price: u64,
+    ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo, LST {
+        let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
+        let token_list = borrow_global_mut<TokenList>(@pool_addr);
+        let pool_info = borrow_global_mut<PoolInfo>(@pool_addr);
+        let token_in_address = get_fa_obj_address(token_in_name, token_in_symbol);
+        let token_out_address = get_fa_obj_address(token_out_name, token_out_symbol);    
+        let (record_token_in_balance, record_token_in_denorm) = {
+            let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+            let record_token_in_balance = record_token_in.balance;
+            let record_token_in_denorm = record_token_in.denorm;
+            (record_token_in_balance, record_token_in_denorm)
+        };
+
+        let (record_token_out_balance, record_token_out_denorm) = {
+            let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
+            let record_token_out_balance = record_token_out.balance;
+            let record_token_out_denorm = record_token_out.denorm;
+            (record_token_out_balance, record_token_out_denorm)
+        };
+        let spot_price_before = Pool_Math::calc_spot_price (
+            record_token_in_balance,
+            record_token_in_denorm,
+            record_token_out_balance,
+            record_token_out_denorm,
+            pool_info.swap_fee,
+        );
+        assert!(spot_price_before <= max_price, ERR_BAD_LIMIT_PRICE);
+        let token_amount_in = Pool_Math::calc_in_given_out(
+            record_token_in_balance,
+            record_token_in_denorm,
+            record_token_out_balance,
+            record_token_out_denorm,
+            token_amount_out,
+            pool_info.swap_fee,
+        );
+        assert!(token_amount_in <= max_amount_in, ERR_LIMIT_IN);
+        {
+            let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+            record_token_in.balance = record_token_in.balance - token_amount_in;
+        };
+        {
+            let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
+            record_token_out.balance = record_token_out.balance + token_amount_out;
+        };
+        let (record_token_in_balance, record_token_in_denorm) = {
+            let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
+            let record_token_in_balance = record_token_in.balance;
+            let record_token_in_denorm = record_token_in.denorm;
+            (record_token_in_balance, record_token_in_denorm)
+        };
+
+        let (record_token_out_balance, record_token_out_denorm) = {
+            let record_token_out = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_out_address);
+            let record_token_out_balance = record_token_out.balance;
+            let record_token_out_denorm = record_token_out.denorm;
+            (record_token_out_balance, record_token_out_denorm)
+        };
+        let spot_price_after = Pool_Math::calc_spot_price(
+            record_token_in_balance,
+            record_token_in_denorm,
+            record_token_out_balance,
+            record_token_out_denorm,
+            pool_info.swap_fee,
+        );
+        assert!(spot_price_after >= spot_price_after, ERR_MATH_APPROX);
+        assert!(spot_price_after <= max_price, ERR_LIMIT_PRICE);
+
+        (token_amount_in, spot_price_after)
+    }
 
     // #[view]
     // public fun get_join_swap_extern_amount_in (
@@ -721,7 +767,7 @@ module pool_addr::Multi_Token_Pool {
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
     
-    fun get_metadata(name: String, symbol: String): Object<Metadata> acquires LST {
+    public fun get_metadata(name: String, symbol: String): Object<Metadata> acquires LST {
         let asset_address = get_fa_obj_address(name, symbol);
         // print(&name);
         // print(&symbol);
@@ -736,6 +782,7 @@ module pool_addr::Multi_Token_Pool {
     
     // ======================================= Unit Test =========================================
 
+
     #[test_only]
     public fun create_token_test(
         sender: &signer,
@@ -746,7 +793,7 @@ module pool_addr::Multi_Token_Pool {
         project_uri: String,
         initial_supply: u64,
     ): Object<Metadata> acquires LST, ManagedFungibleAsset {
-        create_fa(name, symbol, decimals, icon_uri, project_uri);
+        create_fa(sender, name, symbol, decimals, icon_uri, project_uri);
         mint(sender, signer::address_of(sender), initial_supply, name, symbol);
         let asset = get_metadata(name, symbol);
         asset 
@@ -877,8 +924,73 @@ module pool_addr::Multi_Token_Pool {
         assert!(user1_eth_balance == 335, ERR_TEST);
 
         // let pool_balance = primary_fungible_store::balance(sender_addr, asset);
-
+    
     }
     
+    #[test(admin = @pool_addr, user1 = @0x123, user2 = @0x1234)]
+    public fun test_swap_exact_amount_in(admin: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo, ManagedFungibleAsset, LST {
+        let admin_addr = signer::address_of(&admin);
+        let user1_addr = signer::address_of(&user1);
+        let user2_addr = signer::address_of(&user2);
+        init_module(&admin);
+        // let lp_asset = init_supply(&sender, ASSET_SEED);
+        let usdt_name = string::utf8(b"USD Tether");
+        let usdt_symbol = string::utf8(b"USDT");
+        let eth_name = string::utf8(b"Ethereum");
+        let eth_symbol = string::utf8(b"ETH");
+        let lpt_name = string::utf8(b"LP Token");
+        let lpt_symbol = string::utf8(b"LPT");
+        let usdt = create_token_test(
+            &user1,
+            usdt_name,
+            usdt_symbol,
+            6,
+            string::utf8(b"http://example.com/favicon.ico"),
+            string::utf8(b"http://example.com"),
+            500,
+        );
 
+        let eth = create_token_test(
+            &user1,
+            eth_name,
+            eth_symbol,
+            6,
+            string::utf8(b"http://example.com/favicon.ico"),
+            string::utf8(b"http://example.com"),
+            500,
+        );
+        mint(&user2, user2_addr, 500, usdt_name, usdt_symbol);
+        mint(&user2, user2_addr, 500, eth_name, eth_symbol);
+
+        bind(&user1, 100, 50, usdt_name, usdt_symbol);
+        bind(&user1, 150, 50, eth_name, eth_symbol);
+        let max_amounts_in: vector<u64> = vector[500, 500];
+        finalize(&admin);
+        // join_pool(&user1, 10, max_amounts_in);
+        let (token_amount_out, spot_price_after) = get_swap_exact_amount_in(
+            signer::address_of(&user2),
+            usdt_name,
+            usdt_symbol,
+            10,
+            eth_name,
+            eth_symbol,
+            0,
+            1000000
+        );
+        // print(&token_amount_out);
+        swap_exact_amount_in(
+            &user2,
+            usdt_name,
+            usdt_symbol,
+            10,
+            eth_name,
+            eth_symbol,
+            token_amount_out,
+        );
+        
+        let user2_usdt_balance = get_balance(user2_addr, usdt_name, usdt_symbol);
+        assert!(user2_usdt_balance == 490, ERR_TEST);
+        let user2_eth_balance = get_balance(user2_addr, eth_name, eth_symbol);
+        assert!(user2_eth_balance == 514, ERR_TEST);
+    } 
 }

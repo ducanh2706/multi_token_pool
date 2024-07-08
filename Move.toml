@@ -8,6 +8,7 @@ pool_addr = 'a4f9986ef81ebc6fa038bb6ac4c7f7002b9d856d37bf79961a5955ff5dff3cd6'
 pool_deployed_addr = '1446c2e0eb894d1697ee161c38e5f824aa28569dfaa1c9ed47b58e12a4db7e00'
 lst_addr = '1446c2e0eb894d1697ee161c38e5f824aa28569dfaa1c9ed47b58e12a4db7e00'
 pool_math_addr = 'dbfd0ae40382d4ba72235416e3e8c38451b094f247f0841e5a7c2aca4272cf7d'
+test_pool_addr = '34913efa92b5435e9e48e0379f6cf47005d756d161da5f09e7bc697d58853453'
 
 [dependencies.AptosFramework]
 git = "https://github.com/aptos-labs/aptos-core.git"

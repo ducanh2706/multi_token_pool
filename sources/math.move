@@ -7,6 +7,11 @@ module pool_math_addr::Pool_Math {
 
     const ERR_MATH: u64 = 1;
 
+    public fun hellworld(): String {
+        let check = string::utf8(b"hello world");
+        check
+    }
+
     public fun calc_spot_price (
         token_balance_in: u64,
         token_weight_in: u64,
@@ -284,7 +289,7 @@ module pool_math_addr::Pool_Math {
         // let k = bpow(1000000, 1000000);
         // print(&k);
         let token_amount_out = calc_out_given_in(100, 50, 60, 50, 10, 1000);
-        print(&token_amount_out);
+        // print(&token_amount_out);
     }
 
     #[test]
@@ -292,7 +297,7 @@ module pool_math_addr::Pool_Math {
         // let k = bpow(1000000, 1000000);
         // print(&k);
         let token_amount_in = calc_in_given_out(100, 50, 60, 50, 10, 1000);
-        print(&token_amount_in);
+        // print(&token_amount_in);
     }
 
     // #[test]
