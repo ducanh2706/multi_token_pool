@@ -10,7 +10,8 @@ module pool_addr::Multi_Token_Pool {
     use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata, FungibleAsset};
     use aptos_framework::object::{Self, Object, ExtendRef};
     use aptos_framework::primary_fungible_store;
-    use pool_math_addr::Pool_Math;
+    use pool_addr::Pool_Math;
+    use lst_addr::Liquid_Staking_Token;
 
     const ERR_LIMIT_IN:u64 = 0;
     const ERR_TEST: u64 = 101;
@@ -19,13 +20,9 @@ module pool_addr::Multi_Token_Pool {
     const ERR_MATH_APPROX:u64 = 3;
     const ERR_LIMIT_PRICE:u64 = 4;
 
-    const INIT_POOL_SUPPLY: u64 = 100;
+    const INIT_POOL_SUPPLY: u64 = 100 * 1000000;
     const BONE: u64 = 1000000;
     const MIN_FEE: u64 = 1;
-
-    struct LST has key {
-        fa_generator_extend_ref: ExtendRef,
-    }
 
     struct PoolInfo has key {
         total_weight: u64,
@@ -49,14 +46,7 @@ module pool_addr::Multi_Token_Pool {
         records: SimpleMap<address, Record>,
     }
 
-    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
-    struct ManagedFungibleAsset has key {
-        mint_ref: MintRef,
-        transfer_ref: TransferRef,
-        burn_ref: BurnRef,
-    }
-    
-    fun init_module(sender: &signer) acquires LST {
+    fun init_module(sender: &signer) {
         let token_list = TokenList {
             token_list: vector::empty(),
         };
@@ -75,63 +65,21 @@ module pool_addr::Multi_Token_Pool {
 
         let constructor_ref = object::create_named_object(sender, b"FA Generator");
         let fa_generator_extend_ref = object::generate_extend_ref(&constructor_ref);
-        let lst = LST {
-            fa_generator_extend_ref: fa_generator_extend_ref,
-        };
-        move_to(sender, lst);
 
         let name = string::utf8(b"LP Token");
         let symbol = string::utf8(b"LPT");
         let decimals = 6;
         let icon_uri = string::utf8(b"http://example.com/favicon.ico");
         let project_uri = string::utf8(b"http://example.com");
-        create_fa(sender, name, symbol, decimals, icon_uri, project_uri);
-    }
-
-    public entry fun create_fa(
-        sender: &signer,
-        name: String,
-        symbol: String,
-        decimals: u8,
-        icon_uri: String,
-        project_uri: String,
-    ) acquires LST {
-        let lst = borrow_global_mut<LST>(@pool_addr);
-        let fa_generator_signer = object::generate_signer_for_extending(&lst.fa_generator_extend_ref);
-        let fa_key_seed = *string::bytes(&name);
-        vector::append(&mut fa_key_seed, b"-");
-        vector::append(&mut fa_key_seed, *string::bytes(&symbol));
-        let fa_obj_constructor_ref = &object::create_named_object(&fa_generator_signer, fa_key_seed);
-        let fa_obj_signer = object::generate_signer(fa_obj_constructor_ref);
-        primary_fungible_store::create_primary_store_enabled_fungible_asset(
-            fa_obj_constructor_ref,
-            option::none(),
-            name, 
-            symbol, 
-            decimals, 
-            icon_uri, 
-            project_uri,           
-        );
-        let mint_ref = fungible_asset::generate_mint_ref(fa_obj_constructor_ref);
-        let burn_ref = fungible_asset::generate_burn_ref(fa_obj_constructor_ref);
-        let transfer_ref = fungible_asset::generate_transfer_ref(fa_obj_constructor_ref);
-        move_to(
-            &fa_obj_signer,
-            ManagedFungibleAsset {
-                mint_ref,
-                transfer_ref,
-                burn_ref,
-            }
-        );
-
+        Liquid_Staking_Token::create_fa(@lst_addr, name, symbol, decimals, icon_uri, project_uri);
     }
 
     // =============================== Entry Function =====================================
 
     // mint and push LP Token to owner
-    public entry fun finalize(sender: &signer) acquires ManagedFungibleAsset, LST {
+    public entry fun finalize(sender: &signer) {
         // todo: require pool size >= 2 token
-        mint_and_push_pool_share(sender, signer::address_of(sender), INIT_POOL_SUPPLY);
+        mint_and_push_pool_share(sender, @pool_addr, INIT_POOL_SUPPLY);
     }
 
     public entry fun set_swap_fee(sender: &signer, swap_fee: u64) acquires PoolInfo {
@@ -140,7 +88,7 @@ module pool_addr::Multi_Token_Pool {
     }
 
     // @todo: require token lengths not max bound
-    public entry fun bind(sender: &signer, balance: u64, denorm: u64, name: String, symbol: String) acquires TokenRecord, TokenList, PoolInfo, ManagedFungibleAsset, LST {
+    public entry fun bind(sender: &signer, balance: u64, denorm: u64, name: String, symbol: String) acquires TokenRecord, TokenList, PoolInfo {
 
         let sender_addr = signer::address_of(sender);
         let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
@@ -154,18 +102,18 @@ module pool_addr::Multi_Token_Pool {
             symbol: symbol,
         };
 
-        let token_address = get_fa_obj_address(name, symbol);
+        let token_address = Liquid_Staking_Token::get_fa_obj_address(name, symbol);
         simple_map::add(&mut token_record.records, token_address, record);
         vector::push_back(&mut token_list.token_list, token_address);
         rebind(sender, balance, denorm, name, symbol);
     }
 
-    public entry fun rebind(sender: &signer, balance: u64, denorm: u64, name: String, symbol: String) acquires TokenRecord, TokenList, PoolInfo, ManagedFungibleAsset, LST {
+    public entry fun rebind(sender: &signer, balance: u64, denorm: u64, name: String, symbol: String) acquires TokenRecord, TokenList, PoolInfo {
         let sender_addr = signer::address_of(sender);
         let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
         let token_list = borrow_global_mut<TokenList>(@pool_addr);
 
-        let token_address = get_fa_obj_address(name, symbol);
+        let token_address = Liquid_Staking_Token::get_fa_obj_address(name, symbol);
         
         // adjust the denorm and total weight
         let record = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_address);
@@ -190,12 +138,12 @@ module pool_addr::Multi_Token_Pool {
 
     }
 
-    public entry fun unbind(sender: &signer, name: String, symbol: String) acquires TokenRecord, TokenList, PoolInfo, ManagedFungibleAsset, LST {
+    public entry fun unbind(sender: &signer, name: String, symbol: String) acquires TokenRecord, TokenList, PoolInfo {
         let sender_addr = signer::address_of(sender);
         let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
         let token_list = borrow_global_mut<TokenList>(@pool_addr);
 
-        let token_address = get_fa_obj_address(name, symbol);
+        let token_address = Liquid_Staking_Token::get_fa_obj_address(name, symbol);
         
         // adjust the denorm and total weight
         let record = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_address);
@@ -214,6 +162,9 @@ module pool_addr::Multi_Token_Pool {
         record.balance = 0;
         record.index = 0;
         record.denorm = 0;
+        record.name = string::utf8(b"");
+        record.symbol = string::utf8(b"");
+
  
         let record_index = simple_map::borrow_mut<address, Record>(&mut token_record.records, address_index);
         record_index.index = index;
@@ -230,7 +181,7 @@ module pool_addr::Multi_Token_Pool {
         token_out_name: String,
         token_out_symbol: String,
         token_amount_out: u64,
-    ) acquires LST, ManagedFungibleAsset {
+    ){
         pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol);
         push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
     }
@@ -243,7 +194,7 @@ module pool_addr::Multi_Token_Pool {
         token_out_name: String,
         token_out_symbol: String,
         token_amount_out: u64,
-    ) acquires LST, ManagedFungibleAsset {
+    ) {
         pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol);
         push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
     }
@@ -318,33 +269,7 @@ module pool_addr::Multi_Token_Pool {
     //     push_underlying(sender, token_amount_out, seed_token_out);
     // }
 
-    public entry fun mint(sender: &signer, to: address, amount: u64, name: String, symbol: String) acquires LST, ManagedFungibleAsset {
-        let sender_addr = signer::address_of(sender);
-        let asset = get_metadata(name, symbol);
-        let managed_fungble_asset = authorized_borrow_refs(sender, asset);
-        let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
-        let fa = fungible_asset::mint(&managed_fungble_asset.mint_ref, amount);
-        fungible_asset::deposit_with_ref(&managed_fungble_asset.transfer_ref, to_wallet, fa);
-    }
-
-    public entry fun transfer(sender: &signer, from: address, to: address, amount: u64, name: String, symbol: String) acquires LST, ManagedFungibleAsset {
-        let asset = get_metadata(name, symbol);
-        let transfer_ref = &authorized_borrow_refs(sender, asset).transfer_ref;
-        let from_wallet = primary_fungible_store::primary_store(from, asset);
-        let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
-        let fa = withdraw(from_wallet, amount, transfer_ref);
-        deposit(to_wallet, fa, transfer_ref);
-    }
-
-    public entry fun burn(sender: &signer, from: address, amount: u64, name: String, symbol: String) acquires LST, ManagedFungibleAsset {
-        let sender_addr = signer::address_of(sender);
-        let asset = get_metadata(name, symbol);
-        let burn_ref = &authorized_borrow_refs(sender, asset).burn_ref;
-        let from_wallet = primary_fungible_store::primary_store(from, asset);
-        fungible_asset::burn_from(burn_ref, from_wallet, amount);
-    }
-
-    public entry fun join_pool(sender: &signer, pool_amount_out: u64, max_amounts_in: vector<u64>) acquires TokenList, TokenRecord, ManagedFungibleAsset, LST {
+    public entry fun join_pool(sender: &signer, pool_amount_out: u64, max_amounts_in: vector<u64>) acquires TokenList, TokenRecord {
         let sender_addr = signer::address_of(sender);
         let pool_total = get_total_supply_lpt();
         let ratio = pool_amount_out * BONE / pool_total;
@@ -374,7 +299,7 @@ module pool_addr::Multi_Token_Pool {
         mint_and_push_pool_share(sender, sender_addr, pool_amount_out);
     }
 
-    public entry fun exit_pool(sender: &signer, pool_amount_in: u64, min_amounts_out: vector<u64>) acquires TokenList, TokenRecord, ManagedFungibleAsset, LST {
+    public entry fun exit_pool(sender: &signer, pool_amount_in: u64, min_amounts_out: vector<u64>) acquires TokenList, TokenRecord {
         let sender_addr = signer::address_of(sender);
         let pool_total = get_total_supply_lpt();
         let ratio = pool_amount_in / pool_total;
@@ -419,13 +344,13 @@ module pool_addr::Multi_Token_Pool {
         token_out_symbol: String,
         min_amount_out: u64,
         max_price: u64,
-    ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo, LST {
+    ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo {
         let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
         let token_list = borrow_global_mut<TokenList>(@pool_addr);
         let pool_info = borrow_global_mut<PoolInfo>(@pool_addr);
 
-        let token_in_address = get_fa_obj_address(token_in_name, token_in_symbol);
-        let token_out_address = get_fa_obj_address(token_out_name, token_out_symbol);    
+        let token_in_address = Liquid_Staking_Token::get_fa_obj_address(token_in_name, token_in_symbol);
+        let token_out_address = Liquid_Staking_Token::get_fa_obj_address(token_out_name, token_out_symbol);    
         let (record_token_in_balance, record_token_in_denorm) = {
             let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
             let record_token_in_balance = record_token_in.balance;
@@ -504,12 +429,12 @@ module pool_addr::Multi_Token_Pool {
         token_out_symbol: String,
         token_amount_out: u64,
         max_price: u64,
-    ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo, LST {
+    ): (u64, u64) acquires TokenList, TokenRecord, PoolInfo {
         let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
         let token_list = borrow_global_mut<TokenList>(@pool_addr);
         let pool_info = borrow_global_mut<PoolInfo>(@pool_addr);
-        let token_in_address = get_fa_obj_address(token_in_name, token_in_symbol);
-        let token_out_address = get_fa_obj_address(token_out_name, token_out_symbol);    
+        let token_in_address = Liquid_Staking_Token::get_fa_obj_address(token_in_name, token_in_symbol);
+        let token_out_address = Liquid_Staking_Token::get_fa_obj_address(token_out_name, token_out_symbol);    
         let (record_token_in_balance, record_token_in_denorm) = {
             let record_token_in = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_in_address);
             let record_token_in_balance = record_token_in.balance;
@@ -677,107 +602,65 @@ module pool_addr::Multi_Token_Pool {
     //     pool_amount_in
     // }
 
-    #[view]
-    public fun get_lpt_address(): address acquires LST {
-        let lpt_name = string::utf8(b"LP Token");
-        let lpt_symbol = string::utf8(b"LPT");
-        get_fa_obj_address(lpt_name, lpt_symbol)
-    }
-
     #[view] 
-    public fun get_total_supply_lpt(): u64 acquires LST {
+    public fun get_total_supply_lpt(): u64 {
         let lpt_name = string::utf8(b"LP Token");
         let lpt_symbol = string::utf8(b"LPT");
-        get_total_supply(lpt_name, lpt_symbol)
+        Liquid_Staking_Token::get_total_supply(lpt_name, lpt_symbol)
     }
 
-    #[view]
-    public fun get_total_supply(name: String, symbol: String): u64 acquires LST{
-        let asset = get_metadata(name, symbol);
-        let total_supply = fungible_asset::supply(asset);
-        if(option::is_some(&total_supply)) {
-            let value = option::borrow(&total_supply);
-            let result = (*value as u64);
-            result
-        } else {
-            0
-        }
-    }
+    // #[view]
+    // public fun get_total_supply(name: String, symbol: String): u64{
+    //     let asset = get_metadata(name, symbol);
+    //     let total_supply = fungible_asset::supply(asset);
+    //     if(option::is_some(&total_supply)) {
+    //         let value = option::borrow(&total_supply);
+    //         let result = (*value as u64);
+    //         result
+    //     } else {
+    //         0
+    //     }
+    // }
 
     #[view]
-    public fun get_balance(sender_addr: address, name: String, symbol: String): u64 acquires LST {
-        let object_address = get_fa_obj_address(name, symbol);
-        // print(&name);
-        // print(&symbol);
-        // print(&object_address);
-        let fa_metadata_obj: Object<Metadata> = object::address_to_object(object_address);
-        primary_fungible_store::balance(sender_addr, fa_metadata_obj)
+    public fun get_balance(sender_addr: address, name: String, symbol: String): u64 {
+        Liquid_Staking_Token::get_balance(sender_addr, name, symbol)
     }
 
     // ========================================= Helper Function ========================================
 
-    fun get_fa_obj_address(name: String, symbol: String): address acquires LST {
-        let lst = borrow_global<LST>(@pool_addr);
-        let fa_generator_address = object::address_from_extend_ref(&lst.fa_generator_extend_ref);
-        let fa_key_seed = *string::bytes(&name);
-        vector::append(&mut fa_key_seed, b"-");
-        vector::append(&mut fa_key_seed, *string::bytes(&symbol));
-        object::create_object_address(&fa_generator_address, fa_key_seed)
-    }
-
     // transfer amount from sender to pool
-    fun pull_underlying(sender: &signer, amount: u64, name: String, symbol: String) acquires ManagedFungibleAsset, LST {
+    fun pull_underlying(sender: &signer, amount: u64, name: String, symbol: String) {
         let sender_addr = signer::address_of(sender);
         let pool_address = @pool_addr;
-        transfer(sender, sender_addr, pool_address, amount, name, symbol);
+        Liquid_Staking_Token::transfer(sender, sender_addr, pool_address, amount, name, symbol);
     }
     
     // transfer amount from pool to sender
-    fun push_underlying(sender: &signer, amount: u64, name: String, symbol: String) acquires ManagedFungibleAsset, LST {
+    fun push_underlying(sender: &signer, amount: u64, name: String, symbol: String) {
         let sender_addr = signer::address_of(sender);
         let pool_address = @pool_addr;
-        transfer(sender, pool_address, sender_addr, amount, name, symbol);
+        Liquid_Staking_Token::transfer(sender, pool_address, sender_addr, amount, name, symbol);
     }
 
-    fun mint_and_push_pool_share(sender: &signer, to: address, amount: u64) acquires ManagedFungibleAsset, LST{
+    fun mint_and_push_pool_share(sender: &signer, to: address, amount: u64) {
         let lpt_name = string::utf8(b"LP Token");
         let lpt_symbol = string::utf8(b"LPT");
-        mint(sender, to, amount, lpt_name, lpt_symbol);
+        Liquid_Staking_Token::mint(sender, to, amount, lpt_name, lpt_symbol);
     }
 
-    fun pull_pool_share(sender: &signer, sender_addr: address, amount: u64) acquires ManagedFungibleAsset, LST {
+    fun pull_pool_share(sender: &signer, sender_addr: address, amount: u64) {
         let pool_address = @pool_addr;
         let lpt_name = string::utf8(b"LP Token");
         let lpt_symbol = string::utf8(b"LPT");
-        transfer(sender, sender_addr, pool_address, amount, lpt_name, lpt_symbol);
+        Liquid_Staking_Token::transfer(sender, sender_addr, pool_address, amount, lpt_name, lpt_symbol);
     }
 
-    fun burn_pool_share(sender: &signer, amount: u64) acquires ManagedFungibleAsset, LST {
+    fun burn_pool_share(sender: &signer, amount: u64) {
         let pool_address = @pool_addr;
         let lpt_name = string::utf8(b"LP Token");
         let lpt_symbol = string::utf8(b"LPT");
-        burn(sender, pool_address, amount, lpt_name, lpt_symbol);
-    }
-
-    fun deposit<T: key>(store: Object<T>, fa: FungibleAsset, transfer_ref: &TransferRef) {
-        fungible_asset::deposit_with_ref(transfer_ref, store, fa);
-    }
-
-    fun withdraw<T: key>(store: Object<T>, amount: u64, transfer_ref: &TransferRef): FungibleAsset {
-        fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
-    }
-    
-    public fun get_metadata(name: String, symbol: String): Object<Metadata> acquires LST {
-        let asset_address = get_fa_obj_address(name, symbol);
-        // print(&name);
-        // print(&symbol);
-        // print(&asset_address);
-        object::address_to_object(asset_address)
-    }
-
-    inline fun authorized_borrow_refs(owner: &signer, asset: Object<Metadata>): &ManagedFungibleAsset acquires ManagedFungibleAsset {
-        // checkowner
-        borrow_global<ManagedFungibleAsset>(object::object_address(&asset))
+        Liquid_Staking_Token::burn(sender, pool_address, amount, lpt_name, lpt_symbol);
     }
     
     // ======================================= Unit Test =========================================
@@ -792,25 +675,26 @@ module pool_addr::Multi_Token_Pool {
         icon_uri: String,
         project_uri: String,
         initial_supply: u64,
-    ): Object<Metadata> acquires LST, ManagedFungibleAsset {
-        create_fa(sender, name, symbol, decimals, icon_uri, project_uri);
-        mint(sender, signer::address_of(sender), initial_supply, name, symbol);
-        let asset = get_metadata(name, symbol);
+    ): Object<Metadata> {
+        Liquid_Staking_Token::create_fa(signer::address_of(sender), name, symbol, decimals, icon_uri, project_uri);
+        Liquid_Staking_Token::mint(sender, signer::address_of(sender), initial_supply, name, symbol);
+        let asset = Liquid_Staking_Token::get_metadata(name, symbol);
         asset 
     }
 
-    #[test(admin = @pool_addr, user1 = @0x123, user2 = @0x1234)]
-    public fun test_bind_and_unbind(admin: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo, ManagedFungibleAsset, LST {
+    #[test(admin = @pool_addr, creator = @lst_addr, user1 = @0x123, user2 = @0x1234)]
+    public fun test_bind_and_unbind(admin: signer, creator: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo{
         let admin_addr = signer::address_of(&admin);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
+        Liquid_Staking_Token::init(&creator);
         init_module(&admin);
         let usdt_name = string::utf8(b"USD Tether");
         let usdt_symbol = string::utf8(b"USDT");
         let eth_name = string::utf8(b"Ethereum");
         let eth_symbol = string::utf8(b"ETH");
         let usdt = create_token_test(
-            &user1,
+            &creator,
             usdt_name,
             usdt_symbol,
             6,
@@ -820,7 +704,7 @@ module pool_addr::Multi_Token_Pool {
         );
 
         let eth = create_token_test(
-            &user1,
+            &creator,
             eth_name,
             eth_symbol,
             6,
@@ -828,7 +712,9 @@ module pool_addr::Multi_Token_Pool {
             string::utf8(b"http://example.com"),
             500,
         );
-        
+
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500, usdt_name, usdt_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500, eth_name, eth_symbol);
         bind(&user1, 100, 50, usdt_name, usdt_symbol);
         bind(&user1, 150, 50, eth_name, eth_symbol);
 
@@ -873,11 +759,12 @@ module pool_addr::Multi_Token_Pool {
         assert!(pool_eth_balance == 0, ERR_TEST);
     }
 
-    #[test(admin = @pool_addr, user1 = @0x123, user2 = @0x1234)]
-    fun test_join_pool_and_exit_pool(admin: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo, ManagedFungibleAsset, LST {
+    #[test(admin = @pool_addr, creator = @lst_addr, user1 = @0x123, user2 = @0x1234)]
+    fun test_join_pool_and_exit_pool(admin: signer, creator: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo {
         let admin_addr = signer::address_of(&admin);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
+        Liquid_Staking_Token::init(&creator);
         init_module(&admin);
         // let lp_asset = init_supply(&sender, ASSET_SEED);
         let usdt_name = string::utf8(b"USD Tether");
@@ -887,51 +774,55 @@ module pool_addr::Multi_Token_Pool {
         let lpt_name = string::utf8(b"LP Token");
         let lpt_symbol = string::utf8(b"LPT");
         let usdt = create_token_test(
-            &user1,
+            &creator,
             usdt_name,
             usdt_symbol,
             6,
             string::utf8(b"http://example.com/favicon.ico"),
             string::utf8(b"http://example.com"),
-            500,
+            500000000,
         );
 
         let eth = create_token_test(
-            &user1,
+            &creator,
             eth_name,
             eth_symbol,
             6,
             string::utf8(b"http://example.com/favicon.ico"),
             string::utf8(b"http://example.com"),
-            500,
+            500000000,
         );
 
-        bind(&user1, 100, 50, usdt_name, usdt_symbol);
-        bind(&user1, 150, 50, eth_name, eth_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500000000, usdt_name, usdt_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500000000, eth_name, eth_symbol);
+        bind(&user1, 100000000, 50, usdt_name, usdt_symbol);
+        bind(&user1, 150000000, 50, eth_name, eth_symbol);
 
-        let max_amounts_in: vector<u64> = vector[500, 500];
+        let max_amounts_in: vector<u64> = vector[500000000, 500000000];
         let user1_usdt_balance = get_balance(user1_addr, usdt_name, usdt_symbol);
-        assert!(user1_usdt_balance == 400, ERR_TEST);
+        assert!(user1_usdt_balance == 400000000, ERR_TEST);
         finalize(&admin);
-        join_pool(&user1, 10, max_amounts_in);
+        join_pool(&user1, 10000000, max_amounts_in);
         
         // sender hold 10% of pool share, so sender can claim 10 LPT and must deposit 10 Token 1 and 20 Token 2
         let user1_lpt_balance = get_balance(user1_addr, lpt_name, lpt_symbol);
-        assert!(user1_lpt_balance == 10, ERR_TEST);
+        assert!(user1_lpt_balance == 10000000, ERR_TEST);
         let user1_usdt_balance = get_balance(user1_addr, usdt_name, usdt_symbol);
-        assert!(user1_usdt_balance == 390, ERR_TEST);
+        // print(&user1_usdt_balance);
+        assert!(user1_usdt_balance == 390000000, ERR_TEST);
         let user1_eth_balance = get_balance(user1_addr, eth_name, eth_symbol);
-        assert!(user1_eth_balance == 335, ERR_TEST);
+        assert!(user1_eth_balance == 335000000, ERR_TEST);
 
         // let pool_balance = primary_fungible_store::balance(sender_addr, asset);
     
     }
     
-    #[test(admin = @pool_addr, user1 = @0x123, user2 = @0x1234)]
-    public fun test_swap_exact_amount_in(admin: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo, ManagedFungibleAsset, LST {
+    #[test(admin = @pool_addr, creator = @lst_addr, user1 = @0x123, user2 = @0x1234)]
+    public fun test_swap_exact_amount_in(admin: signer, creator: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo {
         let admin_addr = signer::address_of(&admin);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
+        Liquid_Staking_Token::init(&creator);
         init_module(&admin);
         // let lp_asset = init_supply(&sender, ASSET_SEED);
         let usdt_name = string::utf8(b"USD Tether");
@@ -941,37 +832,40 @@ module pool_addr::Multi_Token_Pool {
         let lpt_name = string::utf8(b"LP Token");
         let lpt_symbol = string::utf8(b"LPT");
         let usdt = create_token_test(
-            &user1,
+            &creator,
             usdt_name,
             usdt_symbol,
             6,
             string::utf8(b"http://example.com/favicon.ico"),
             string::utf8(b"http://example.com"),
-            500,
+            1000000000,
         );
 
         let eth = create_token_test(
-            &user1,
+            &creator,
             eth_name,
             eth_symbol,
             6,
             string::utf8(b"http://example.com/favicon.ico"),
             string::utf8(b"http://example.com"),
-            500,
+            1000000000,
         );
-        mint(&user2, user2_addr, 500, usdt_name, usdt_symbol);
-        mint(&user2, user2_addr, 500, eth_name, eth_symbol);
 
-        bind(&user1, 100, 50, usdt_name, usdt_symbol);
-        bind(&user1, 150, 50, eth_name, eth_symbol);
-        let max_amounts_in: vector<u64> = vector[500, 500];
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500000000, usdt_name, usdt_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500000000, eth_name, eth_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user2_addr, 500000000, usdt_name, usdt_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user2_addr, 500000000, eth_name, eth_symbol);
+
+        bind(&user1, 100000000, 50, usdt_name, usdt_symbol);
+        bind(&user1, 150000000, 50, eth_name, eth_symbol);
+        let max_amounts_in: vector<u64> = vector[500000000, 500000000];
         finalize(&admin);
-        // join_pool(&user1, 10, max_amounts_in);
+        join_pool(&user1, 10000000, max_amounts_in);
         let (token_amount_out, spot_price_after) = get_swap_exact_amount_in(
             signer::address_of(&user2),
             usdt_name,
             usdt_symbol,
-            10,
+            10000000,
             eth_name,
             eth_symbol,
             0,
@@ -982,15 +876,15 @@ module pool_addr::Multi_Token_Pool {
             &user2,
             usdt_name,
             usdt_symbol,
-            10,
+            10000000,
             eth_name,
             eth_symbol,
             token_amount_out,
         );
         
         let user2_usdt_balance = get_balance(user2_addr, usdt_name, usdt_symbol);
-        assert!(user2_usdt_balance == 490, ERR_TEST);
+        assert!(user2_usdt_balance == 490000000, ERR_TEST);
         let user2_eth_balance = get_balance(user2_addr, eth_name, eth_symbol);
-        assert!(user2_eth_balance == 514, ERR_TEST);
+        assert!(user2_eth_balance == 513749945, ERR_TEST);
     } 
 }

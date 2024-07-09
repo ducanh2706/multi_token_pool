@@ -1,4 +1,4 @@
-module lst_deployed_addr::Liquid_Staking_Token {
+module lst_addr::Liquid_Staking_Token {
     use std::signer;
     use std::vector;
     use std::debug::print;
@@ -24,7 +24,7 @@ module lst_deployed_addr::Liquid_Staking_Token {
         burn_ref: BurnRef,
     }
     
-    fun init_module(sender: &signer) {
+    public fun init(sender: &signer) {
         let constructor_ref = object::create_named_object(sender, b"FA Generator");
         let fa_generator_extend_ref = object::generate_extend_ref(&constructor_ref);
         let lst = LST {
@@ -35,6 +35,7 @@ module lst_deployed_addr::Liquid_Staking_Token {
 
     // Initialize metadata object and store the refs
     public entry fun create_fa(
+        sender_addr: address,
         name: String,
         symbol: String,
         decimals: u8,
@@ -131,13 +132,13 @@ module lst_deployed_addr::Liquid_Staking_Token {
     // ========================================= Helper Function ========================================
 
     
-    fun get_metadata(name: String, symbol: String): Object<Metadata> acquires LST {
+    public fun get_metadata(name: String, symbol: String): Object<Metadata> acquires LST {
         let asset_address = get_fa_obj_address(name, symbol);
         object::address_to_object(asset_address)
     }
     
 
-    fun get_fa_obj_address(name: String, symbol: String): address acquires LST {
+    public fun get_fa_obj_address(name: String, symbol: String): address acquires LST {
         let lst = borrow_global<LST>(@lst_addr);
         let fa_generator_address = object::address_from_extend_ref(&lst.fa_generator_extend_ref);
         let fa_key_seed = *string::bytes(&name);
@@ -171,7 +172,7 @@ module lst_deployed_addr::Liquid_Staking_Token {
         project_uri: String,
         initial_supply: u64,
     ): Object<Metadata> acquires LST, ManagedFungibleAsset {
-        create_fa(name, symbol, decimals, icon_uri, project_uri);
+        create_fa(signer::address_of(sender), name, symbol, decimals, icon_uri, project_uri);
         mint(sender, signer::address_of(sender), initial_supply, name, symbol);
         let asset = get_metadata(name, symbol);
         asset 
@@ -183,7 +184,7 @@ module lst_deployed_addr::Liquid_Staking_Token {
         let sender_addr = signer::address_of(&sender);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
-        init_module(&sender);
+        init(&sender);
         let usdt_name = string::utf8(b"USD Tether");
         let usdt_symbol = string::utf8(b"USDT");
         let eth_name = string::utf8(b"Ethereum");

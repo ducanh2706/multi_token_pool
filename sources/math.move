@@ -1,4 +1,4 @@
-module pool_math_addr::Pool_Math {
+module pool_addr::Pool_Math {
     use std::debug::print;
     use std::string::{Self, String, utf8};
 
