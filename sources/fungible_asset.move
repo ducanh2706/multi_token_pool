@@ -33,6 +33,8 @@ module lst_addr::Liquid_Staking_Token {
         move_to(sender, lst);
     }
 
+    // =============================== Entry Function =====================================
+
     // Initialize metadata object and store the refs
     public entry fun create_fa(
         sender_addr: address,
@@ -71,8 +73,6 @@ module lst_addr::Liquid_Staking_Token {
         );
 
     }
-
-    // =============================== Entry Function =====================================
 
     public entry fun mint(sender: &signer, to: address, amount: u64, name: String, symbol: String) acquires LST, ManagedFungibleAsset {
         let sender_addr = signer::address_of(sender);
