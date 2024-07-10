@@ -30,7 +30,7 @@ module pool_addr::Multi_Token_Pool {
         is_finalized: bool,
     }
 
-    struct Record has key, store {
+    struct Record has key, store, drop {
         bound: bool,
         index: u64, 
         denorm: u64,
@@ -144,13 +144,11 @@ module pool_addr::Multi_Token_Pool {
         let sender_addr = signer::address_of(sender);
         let token_record = borrow_global_mut<TokenRecord>(@pool_addr);
         let token_list = borrow_global_mut<TokenList>(@pool_addr);
-
+        let pool_info = borrow_global_mut<PoolInfo>(@pool_addr);
         let token_address = Liquid_Staking_Token::get_fa_obj_address(name, symbol);
-        
+
         // adjust the denorm and total weight
         let record = simple_map::borrow_mut<address, Record>(&mut token_record.records, &token_address);
-        let pool_info = borrow_global_mut<PoolInfo>(@pool_addr);
-
         let token_balance = record.balance;
         pool_info.total_weight = pool_info.total_weight - record.denorm;
 
@@ -158,20 +156,32 @@ module pool_addr::Multi_Token_Pool {
         // then delete the last token
         let index = record.index;
         let last = vector::length(&token_list.token_list) - 1;
+        let address_last = {
+            let addr = *vector::borrow(&token_list.token_list, last);
+            addr
+        };
+        // print(&token_address);
+        // print(&address_index);
+        // let i = 0;
+        // while (i <= last) {
+        //     let addr = *vector::borrow(&token_list.token_list, (i as u64));
+        //     print(&addr);
+        //     i = i + 1;
+        // };
         vector::swap(&mut token_list.token_list, index, last);
-        let address_index = vector::borrow(&token_list.token_list, index);  
         record.bound = false;
         record.balance = 0;
         record.index = 0;
         record.denorm = 0;
         record.name = string::utf8(b"");
         record.symbol = string::utf8(b"");
-
- 
-        let record_index = simple_map::borrow_mut<address, Record>(&mut token_record.records, address_index);
-        record_index.index = index;
-        vector::pop_back(&mut token_list.token_list);
         
+        simple_map::remove<address, Record>(&mut token_record.records, &token_address);
+        if(index != last) {
+            let record_last = simple_map::borrow_mut<address, Record>(&mut token_record.records, &address_last);
+            record_last.index = index;
+        };
+        vector::pop_back(&mut token_list.token_list);
         push_underlying(sender, token_balance, name, symbol);
     }
 
