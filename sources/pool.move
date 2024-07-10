@@ -647,7 +647,7 @@ module pool_addr::Multi_Token_Pool {
         let token_name_list= vector::empty<String>();
         let token_list = borrow_global<TokenList>(@pool_addr);
         let token_record = borrow_global<TokenRecord>(@pool_addr);
-        let num_tokens = get_num_tokens();
+        let num_tokens = vector::length(&token_list.token_list);
         let i = 0;
         while (i < num_tokens) {
             let token_address = vector::borrow(&token_list.token_list, (i as u64));
@@ -670,7 +670,7 @@ module pool_addr::Multi_Token_Pool {
         let token_symbol_list = vector::empty<String>();
         let token_list = borrow_global<TokenList>(@pool_addr);
         let token_record = borrow_global<TokenRecord>(@pool_addr);
-        let num_tokens = get_num_tokens();
+        let num_tokens = vector::length(&token_list.token_list);
         let i = 0;
         while (i < num_tokens) {
             let token_address = vector::borrow(&token_list.token_list, (i as u64));
@@ -687,7 +687,7 @@ module pool_addr::Multi_Token_Pool {
         let token_denorm_list = vector::empty<u64>();
         let token_list = borrow_global<TokenList>(@pool_addr);
         let token_record = borrow_global<TokenRecord>(@pool_addr);
-        let num_tokens = get_num_tokens();
+        let num_tokens = vector::length(&token_list.token_list);
         let i = 0;
         while (i < num_tokens) {
             let token_address = vector::borrow(&token_list.token_list, (i as u64));
@@ -700,11 +700,11 @@ module pool_addr::Multi_Token_Pool {
     }
 
     #[view]
-    public fun get_token_weight_list(): vector<u64> acquires TokenList, TokenRecord {
+    public fun get_token_weight_list(): vector<u64> acquires TokenList, TokenRecord, PoolInfo {
         let token_weight_list = vector::empty<u64>();
         let token_list = borrow_global<TokenList>(@pool_addr);
         let token_record = borrow_global<TokenRecord>(@pool_addr);
-        let num_tokens = get_num_tokens();
+        let num_tokens = vector::length(&token_list.token_list);
         let total_weight = get_total_denormalized_weight();
         let i = 0;
         while (i < num_tokens) {
@@ -814,7 +814,7 @@ module pool_addr::Multi_Token_Pool {
         let admin_addr = signer::address_of(&admin);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
-        // Liquid_Staking_Token::init(&creator);
+        Liquid_Staking_Token::init(&creator);
         init_module(&admin);
         let usdt_name = string::utf8(b"USD Tether");
         let usdt_symbol = string::utf8(b"USDT");
@@ -891,7 +891,7 @@ module pool_addr::Multi_Token_Pool {
         let admin_addr = signer::address_of(&admin);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
-        // Liquid_Staking_Token::init(&creator);
+        Liquid_Staking_Token::init(&creator);
         init_module(&admin);
         // let lp_asset = init_supply(&sender, ASSET_SEED);
         let usdt_name = string::utf8(b"USD Tether");
@@ -949,7 +949,7 @@ module pool_addr::Multi_Token_Pool {
         let admin_addr = signer::address_of(&admin);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
-        // Liquid_Staking_Token::init(&creator);
+        Liquid_Staking_Token::init(&creator);
         init_module(&admin);
         // let lp_asset = init_supply(&sender, ASSET_SEED);
         let usdt_name = string::utf8(b"USD Tether");

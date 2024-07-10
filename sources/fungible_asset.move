@@ -24,7 +24,8 @@ module lst_addr::Liquid_Staking_Token {
         burn_ref: BurnRef,
     }
     
-    public fun init(sender: &signer) {
+    // automatically called when deploy module
+    fun init_module(sender: &signer) {
         let constructor_ref = object::create_named_object(sender, b"FA Generator");
         let fa_generator_extend_ref = object::generate_extend_ref(&constructor_ref);
         let lst = LST {
@@ -32,6 +33,7 @@ module lst_addr::Liquid_Staking_Token {
         };
         move_to(sender, lst);
     }
+
 
     // =============================== Entry Function =====================================
 
@@ -130,14 +132,21 @@ module lst_addr::Liquid_Staking_Token {
     }
 
     // ========================================= Helper Function ========================================
-
     
+    public fun init(sender: &signer) {
+        let constructor_ref = object::create_named_object(sender, b"FA Generator");
+        let fa_generator_extend_ref = object::generate_extend_ref(&constructor_ref);
+        let lst = LST {
+            fa_generator_extend_ref: fa_generator_extend_ref,
+        };
+        move_to(sender, lst);
+    }
+
     public fun get_metadata(name: String, symbol: String): Object<Metadata> acquires LST {
         let asset_address = get_fa_obj_address(name, symbol);
         object::address_to_object(asset_address)
     }
     
-
     public fun get_fa_obj_address(name: String, symbol: String): address acquires LST {
         let lst = borrow_global<LST>(@lst_addr);
         let fa_generator_address = object::address_from_extend_ref(&lst.fa_generator_extend_ref);
@@ -178,13 +187,12 @@ module lst_addr::Liquid_Staking_Token {
         asset 
     }
 
-
     #[test(sender = @lst_addr, user1 = @0x123, user2 = @0x1234)]
     public fun test_flow(sender: signer, user1: signer, user2: signer) acquires LST, ManagedFungibleAsset {
         let sender_addr = signer::address_of(&sender);
         let user1_addr = signer::address_of(&user1);
         let user2_addr = signer::address_of(&user2);
-        init(&sender);
+        init_module(&sender);
         let usdt_name = string::utf8(b"USD Tether");
         let usdt_symbol = string::utf8(b"USDT");
         let eth_name = string::utf8(b"Ethereum");
