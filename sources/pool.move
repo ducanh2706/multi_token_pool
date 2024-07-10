@@ -322,7 +322,7 @@ module pool_addr::Multi_Token_Pool {
     public entry fun exit_pool(sender: &signer, pool_amount_in: u64, min_amounts_out: vector<u64>) acquires TokenList, TokenRecord {
         let sender_addr = signer::address_of(sender);
         let pool_total = get_total_supply_lpt();
-        let ratio = pool_amount_in / pool_total;
+        let ratio = pool_amount_in * BONE / pool_total;
         pull_pool_share(sender, sender_addr, pool_amount_in);
         burn_pool_share(sender, pool_amount_in);
         
@@ -336,7 +336,10 @@ module pool_addr::Multi_Token_Pool {
             let min_amount_out = vector::borrow(&min_amounts_out, (i as u64));
             let name = record.name;
             let symbol = record.symbol;
-            let token_amount_out = ratio * record.balance;
+            let token_amount_out = ratio * record.balance / BONE;
+            // print(&ratio);
+            // print(&record.balance);
+            // print(&token_amount_out);
             record.balance = record.balance - token_amount_out;
             push_underlying(sender, token_amount_out, name, symbol);
             i = i + 1;
@@ -951,6 +954,15 @@ module pool_addr::Multi_Token_Pool {
         assert!(user1_eth_balance == 335000000, ERR_TEST);
 
         // let pool_balance = primary_fungible_store::balance(sender_addr, asset);
+        let min_amounts_out: vector<u64> = vector[0, 0];
+        exit_pool(&user1, 10000000, min_amounts_out);
+        let user1_lpt_balance = get_balance(user1_addr, lpt_name, lpt_symbol);
+        assert!(user1_lpt_balance == 0, ERR_TEST);
+        let user1_usdt_balance = get_balance(user1_addr, usdt_name, usdt_symbol);
+        // print(&user1_usdt_balance);
+        // assert!(user1_usdt_balance == 400000000, ERR_TEST);
+        let user1_eth_balance = get_balance(user1_addr, eth_name, eth_symbol);
+        // assert!(user1_eth_balance == 350000000, ERR_TEST);
     
     }
     
