@@ -185,7 +185,7 @@ module pool_addr::Multi_Token_Pool {
         push_underlying(sender, token_balance, name, symbol);
     }
 
-    public entry fun swap_exact_amount_in(
+    public entry fun swap (
         sender: &signer,
         token_in_name: String,
         token_in_symbol: String,
@@ -198,92 +198,26 @@ module pool_addr::Multi_Token_Pool {
         push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
     }
 
-    public entry fun swap_exact_amount_out(
+    public entry fun join_swap (
         sender: &signer,
         token_in_name: String,
         token_in_symbol: String,
         token_amount_in: u64,
-        token_out_name: String,
-        token_out_symbol: String,
-        token_amount_out: u64,
-    ) {
-        pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol);
-        push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
-    }
-
-    public entry fun join_swap_extern_amount_in (
-        sender: &signer, 
-        token_in_name: String,
-        token_in_symbol: String,
-        token_amount_in: u64,
-        min_pool_amount_out: u64,
-    ) acquires TokenList, TokenRecord, PoolInfo {
-        let sender_addr = signer::address_of(sender);
-        let pool_amount_out = get_join_swap_extern_amount_in(
-            sender_addr, 
-            token_in_name,
-            token_in_symbol,
-            token_amount_in,
-            min_pool_amount_out,
-        );
-        mint_and_push_pool_share(sender, sender_addr, pool_amount_out);
-        pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol);
-    }
-
-    public entry fun join_swap_pool_amount_out (
-        sender: &signer,
-        token_in_name: String,
-        token_in_symbol: String,
         pool_amount_out: u64,
-        max_amount_in: u64,
-    ) acquires TokenList, TokenRecord, PoolInfo {
+    ) {
         let sender_addr = signer::address_of(sender);
-        let token_amount_in = get_join_swap_pool_amount_out(
-            sender_addr,
-            token_in_name,
-            token_in_symbol,
-            pool_amount_out,
-            max_amount_in,
-        );
         mint_and_push_pool_share(sender, sender_addr, pool_amount_out);
         pull_underlying(sender, token_amount_in, token_in_name, token_in_symbol,);
     }
 
-    public entry fun exit_swap_pool_amount_in (
+    public entry fun exit_swap(
         sender: &signer,
         token_out_name: String,
         token_out_symbol: String,
         pool_amount_in: u64,
-        min_amount_out: u64,
-    ) acquires TokenList, TokenRecord, PoolInfo {
-        let sender_addr = signer::address_of(sender);
-        let token_amount_out = get_exit_swap_pool_amount_in (
-            sender_addr,
-            token_out_name,
-            token_out_symbol,
-            pool_amount_in,
-            min_amount_out,
-        );
-        pull_pool_share(sender, sender_addr, pool_amount_in);
-        burn_pool_share(sender, pool_amount_in);
-        push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
-    }
-
-    public entry fun exit_swap_extern_amount_out (
-        sender: &signer,
-        token_out_name: String,
-        token_out_symbol: String,
         token_amount_out: u64,
-        max_pool_amount_in: u64,
-    ) acquires TokenList, TokenRecord, PoolInfo {
+    ) {
         let sender_addr = signer::address_of(sender);
-        let pool_amount_in = get_exit_swap_extern_amount_out(
-            sender_addr,
-            token_out_name,
-            token_out_symbol,
-            token_amount_out,
-            max_pool_amount_in,
-        );
         pull_pool_share(sender, sender_addr, pool_amount_in);
         burn_pool_share(sender, pool_amount_in);
         push_underlying(sender, token_amount_out, token_out_name, token_out_symbol);
@@ -550,6 +484,7 @@ module pool_addr::Multi_Token_Pool {
             token_amount_in,
             pool_info.swap_fee,
         );
+        // print(&pool_amount_out);
         assert!(pool_amount_out >= min_pool_amount_out, ERR_LIMIT_OUT);
         record_token_in.balance = record_token_in.balance + token_amount_in;
         pool_amount_out
@@ -697,6 +632,23 @@ module pool_addr::Multi_Token_Pool {
             i = i + 1;
         };
         token_symbol_list
+    }
+
+    #[view]
+    public fun get_pool_balance(): vector<u64> acquires TokenList, TokenRecord {
+        let token_balance_list = vector::empty<u64>();
+        let token_list = borrow_global<TokenList>(@pool_addr);
+        let token_record = borrow_global<TokenRecord>(@pool_addr);
+        let num_tokens = vector::length(&token_list.token_list);
+        let i = 0;
+        while (i < num_tokens) {
+            let token_address = vector::borrow(&token_list.token_list, (i as u64));
+            let record = simple_map::borrow(&token_record.records, token_address);
+            let token_balance = record.balance;
+            vector::push_back(&mut token_balance_list, token_balance);
+            i = i + 1;
+        };
+        token_balance_list
     }
 
     #[view]
@@ -963,10 +915,10 @@ module pool_addr::Multi_Token_Pool {
         let user1_lpt_balance = get_balance(user1_addr, lpt_name, lpt_symbol);
         assert!(user1_lpt_balance == 0, ERR_TEST);
         let user1_usdt_balance = get_balance(user1_addr, usdt_name, usdt_symbol);
-        print(&user1_usdt_balance);
+        // print(&user1_usdt_balance);
         // assert!(user1_usdt_balance == 400000000, ERR_TEST);
         let user1_eth_balance = get_balance(user1_addr, eth_name, eth_symbol);
-        print(&user1_eth_balance);
+        // print(&user1_eth_balance);
         // assert!(user1_eth_balance == 350000000, ERR_TEST);
     
     }
@@ -1026,7 +978,7 @@ module pool_addr::Multi_Token_Pool {
             1000000
         );
         // print(&token_amount_out);
-        swap_exact_amount_in(
+        swap(
             &user2,
             usdt_name,
             usdt_symbol,
@@ -1039,6 +991,74 @@ module pool_addr::Multi_Token_Pool {
         let user2_usdt_balance = get_balance(user2_addr, usdt_name, usdt_symbol);
         assert!(user2_usdt_balance == 490000000, ERR_TEST);
         let user2_eth_balance = get_balance(user2_addr, eth_name, eth_symbol);
-        assert!(user2_eth_balance == 513749945, ERR_TEST);
+        // print(&user2_eth_balance);
+        assert!(user2_eth_balance == 513737405, ERR_TEST);
+    } 
+
+    #[test(admin = @pool_addr, creator = @lst_addr, user1 = @0x123, user2 = @0x1234)]
+    public fun test_swap_extern_amount_in(admin: signer, creator: signer, user1: signer, user2: signer) acquires TokenList, TokenRecord, PoolInfo {
+        let admin_addr = signer::address_of(&admin);
+        let user1_addr = signer::address_of(&user1);
+        let user2_addr = signer::address_of(&user2);
+        Liquid_Staking_Token::init(&creator);
+        init_module(&admin);
+        // let lp_asset = init_supply(&sender, ASSET_SEED);
+        let usdt_name = string::utf8(b"USD Tether");
+        let usdt_symbol = string::utf8(b"USDT");
+        let eth_name = string::utf8(b"Ethereum");
+        let eth_symbol = string::utf8(b"ETH");
+        let lpt_name = string::utf8(b"LP Token");
+        let lpt_symbol = string::utf8(b"LPT");
+        let usdt = create_token_test(
+            &creator,
+            usdt_name,
+            usdt_symbol,
+            6,
+            string::utf8(b"http://example.com/favicon.ico"),
+            string::utf8(b"http://example.com"),
+            1000000000,
+        );
+
+        let eth = create_token_test(
+            &creator,
+            eth_name,
+            eth_symbol,
+            6,
+            string::utf8(b"http://example.com/favicon.ico"),
+            string::utf8(b"http://example.com"),
+            1000000000,
+        );
+
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500000000, usdt_name, usdt_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user1_addr, 500000000, eth_name, eth_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user2_addr, 500000000, usdt_name, usdt_symbol);
+        Liquid_Staking_Token::transfer(&creator, signer::address_of(&creator), user2_addr, 500000000, eth_name, eth_symbol);
+
+        bind(&user1, 100000000, 50, usdt_name, usdt_symbol);
+        bind(&user1, 150000000, 50, eth_name, eth_symbol);
+        let max_amounts_in: vector<u64> = vector[500000000, 500000000];
+        finalize(&admin);
+        join_pool(&user1, 10000000, max_amounts_in);
+        let pool_amount_out = get_join_swap_extern_amount_in(
+            signer::address_of(&user2),
+            eth_name,
+            eth_symbol,
+            50000000,
+            0,
+        );
+        // print(&token_amount_out);
+        join_swap(
+            &user2,
+            eth_name,
+            eth_symbol,
+            50000000,
+            pool_amount_out,
+        );
+        
+        let user2_lpt_balance = get_balance(user2_addr, lpt_name, lpt_symbol);
+        assert!(user2_lpt_balance == pool_amount_out, ERR_TEST);
+        let user2_eth_balance = get_balance(user2_addr, eth_name, eth_symbol);
+        // print(&user2_eth_balance);
+        assert!(user2_eth_balance == 450000000, ERR_TEST);
     } 
 }
