@@ -238,7 +238,7 @@ module pool_addr::Multi_Token_Pool {
         max_amount_in: u64,
     ) acquires TokenList, TokenRecord, PoolInfo {
         let sender_addr = signer::address_of(sender);
-        let token_amount_in = get_join_swap_pool_amount_out (
+        let token_amount_in = get_join_swap_pool_amount_out(
             sender_addr,
             token_in_name,
             token_in_symbol,
@@ -555,6 +555,7 @@ module pool_addr::Multi_Token_Pool {
         pool_amount_out
     }
 
+    #[view]
     public fun get_join_swap_pool_amount_out (
         sender_addr: address,
         token_in_name: String,
