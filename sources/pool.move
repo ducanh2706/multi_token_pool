@@ -22,7 +22,7 @@ module pool_addr::Multi_Token_Pool {
 
     const INIT_POOL_SUPPLY: u64 = 100 * 1000000;
     const BONE: u64 = 1000000;
-    const MIN_FEE: u64 = 1;
+    const MIN_FEE: u64 = 1000;
 
     struct PoolInfo has key {
         total_weight: u64,
@@ -292,7 +292,7 @@ module pool_addr::Multi_Token_Pool {
     public entry fun join_pool(sender: &signer, pool_amount_out: u64, max_amounts_in: vector<u64>) acquires TokenList, TokenRecord {
         let sender_addr = signer::address_of(sender);
         let pool_total = get_total_supply_lpt();
-        let ratio = pool_amount_out * BONE / pool_total;
+        let ratio = Pool_Math::div(pool_amount_out, pool_total);
         // print(&pool_amount_out);
         // print(&pool_total);
         // print(&ratio);
@@ -307,7 +307,7 @@ module pool_addr::Multi_Token_Pool {
             let name = record.name;
             let symbol = record.symbol;
             // Amount In to deposit
-            let token_amount_in = ratio * record.balance / BONE;
+            let token_amount_in = Pool_Math::mul(ratio, record.balance);
             assert!(token_amount_in <= *max_amount_in, ERR_LIMIT_IN);
 
             record.balance = record.balance + token_amount_in;
@@ -322,7 +322,10 @@ module pool_addr::Multi_Token_Pool {
     public entry fun exit_pool(sender: &signer, pool_amount_in: u64, min_amounts_out: vector<u64>) acquires TokenList, TokenRecord {
         let sender_addr = signer::address_of(sender);
         let pool_total = get_total_supply_lpt();
-        let ratio = pool_amount_in * BONE / pool_total;
+        let ratio = Pool_Math::div(pool_amount_in, pool_total);
+        // print(&pool_amount_in);
+        // print(&pool_total);
+        // print(&ratio);
         pull_pool_share(sender, sender_addr, pool_amount_in);
         burn_pool_share(sender, pool_amount_in);
         
@@ -336,7 +339,7 @@ module pool_addr::Multi_Token_Pool {
             let min_amount_out = vector::borrow(&min_amounts_out, (i as u64));
             let name = record.name;
             let symbol = record.symbol;
-            let token_amount_out = ratio * record.balance / BONE;
+            let token_amount_out = Pool_Math::mul(ratio, record.balance);
             // print(&ratio);
             // print(&record.balance);
             // print(&token_amount_out);
@@ -959,9 +962,10 @@ module pool_addr::Multi_Token_Pool {
         let user1_lpt_balance = get_balance(user1_addr, lpt_name, lpt_symbol);
         assert!(user1_lpt_balance == 0, ERR_TEST);
         let user1_usdt_balance = get_balance(user1_addr, usdt_name, usdt_symbol);
-        // print(&user1_usdt_balance);
+        print(&user1_usdt_balance);
         // assert!(user1_usdt_balance == 400000000, ERR_TEST);
         let user1_eth_balance = get_balance(user1_addr, eth_name, eth_symbol);
+        print(&user1_eth_balance);
         // assert!(user1_eth_balance == 350000000, ERR_TEST);
     
     }

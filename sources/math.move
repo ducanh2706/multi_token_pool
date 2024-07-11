@@ -153,6 +153,14 @@ module pool_addr::Pool_Math {
         let pool_amount_in = bdiv(pool_amount_in_after_exit_fee, bsub(BONE, EXIT_FEE));
         pool_amount_in
     }
+    
+    public fun mul(a: u64, b: u64): u64 {
+        bmul(a, b)
+    }
+
+    public fun div(a: u64, b: u64): u64 {
+        bdiv(a, b)
+    }
 
     // =========================================== Helper Funtion ====================================
 
