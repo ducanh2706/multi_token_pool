@@ -161,7 +161,7 @@ function CreatePool() {
             <div className="poolBox">
                 <div className="poolBoxHeader">
                     <h2>Create Pool</h2>
-                    <div className='generalButton' onClick={_addAsset}>
+                    <div className='generalButton' onClick={_addAsset} style={{marginRight: -20}}>
                         <AddIcon/>
                     </div>
                 </div>

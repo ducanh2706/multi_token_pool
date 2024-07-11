@@ -105,10 +105,58 @@ function Pools(){
                 open={isOpenWithdraw}
                 footer={null}
                 onCancel={() => setIsOpenWithdraw(false)}
-                title="Withdraw"
+                title="Remove liquidity"
             >
-                <div className="modalContent">
-                hallo
+                <div className="modalContent" style={{paddingTop: 20}}>
+                    <div className="inputsDeposit">
+                        <Input
+                            className="depositInput"
+                            placeholder="0"
+                        />
+                        <div className="multiAsset" >
+                            {pool.assets.map((asset, index) => (
+                                <img
+                                    src={asset.asset.img}
+                                    alt="assetOneLogo"
+                                    className="assetLogo"
+                                    key={index}
+                                    style={{ marginRight: index !== pool.assets.length - 1 ? '-12px' : '0' }}
+                                />
+                            ))}
+                            <div>&nbsp;LP</div>
+                        </div>
+                    </div>
+                    <div style={{display: "flex", flexDirection: "column", width: "85%", margin: "0 auto", fontWeight: 500}}>
+                        <div className="rowContainer" style={{fontSize: "large"}}>
+                            <div>
+                                Your position
+                            </div>
+                            <div style={{ color: "#d3d3d3"}}>
+                                18518.00$ ≈ 123.00 LP
+                            </div>
+                        </div>     
+                        <div className="rowContainer" style={{fontSize: "large", marginTop: "8px"}}>
+                            <div>
+                                You receive
+                            </div>
+                            <div style={{ color: "#d3d3d3"}}>
+                                {pool.assets.map((asset, index) => (
+                                    <div style={{marginTop: 8, display: "flex", flexDirection:"row", gap: "4px"}}>
+                                        <div>
+                                            10.00
+                                        </div>
+                                        <div className="assetRemove">
+                                            <img src={asset.asset.img} alt="assetOneLogo" className="assetLogo" />
+                                            {asset.asset.ticker}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>    
+                    </div>
+                    <div style={{width: "90%", margin: "0 auto"}}>
+                        <div className="swapButton" style={{marginBottom: 0}}>Remove liquidity</div>
+                    </div>
                 </div>
             </Modal>
 
