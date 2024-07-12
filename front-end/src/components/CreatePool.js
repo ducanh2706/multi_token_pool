@@ -11,6 +11,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { Input, Popover, Radio, Modal, message } from "antd";
 import tokenList from "../tokenList.json";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import CloseIcon from '@mui/icons-material/Close';
 
 
 function createData(name, calories, fat, carbs, protein) {
@@ -47,14 +48,18 @@ function CreatePool() {
         setAssetWeights(assetWeights.map((weight, i) => (i === index ? null : weight)));
     };
 
-    const removeAsset = (asset) => {
-        setAssets(assets.filter((item) => item !== asset));
-    };
-
     const modifyAsset = (asset) => {
         updateAsset(modalAsset, asset);
         setIsOpen(false);
     }   
+
+    const removeAsset = (index) => {
+        setAssets((prevItems) => prevItems.filter((item, i) => i !== index));
+        setAssetAmount((prevItems) => prevItems.filter((item, i) => i !== index));
+        setAssetWeights((prevItems) => prevItems.filter((item, i) => i !== index));
+        
+        setAssetPrice((prevItems) => prevItems.filter((item, i) => i !== index));
+    };
 
     function changeWeights(e, index){
         var _assetWeights = structuredClone(assetWeights);
@@ -176,6 +181,7 @@ function CreatePool() {
                             <TableCell style={{fontSize: 16, color: 'white', fontWeight: 'bold', background: '#0E111B'}} align="right">Price</TableCell>
                             <TableCell style={{fontSize: 16, color: 'white', fontWeight: 'bold', background: '#0E111B'}} align="right">Value</TableCell>
                             <TableCell style={{fontSize: 16, color: 'white', fontWeight: 'bold', background: '#0E111B'}} align="right">Percent</TableCell>
+                            <TableCell style={{fontSize: 16, color: 'white', fontWeight: 'bold', background: '#0E111B'}} align="right"></TableCell>
                         </TableRow>
                         </TableHead>
                         <TableBody>
@@ -220,6 +226,11 @@ function CreatePool() {
                             </TableCell>
                             <TableCell style={{fontSize: 16, color: 'white', fontWeight: 'bold', background: '#0E111B'}} align="right">
                                 {calculatePercentage(index)}%
+                            </TableCell>
+                            <TableCell style={{fontSize: 16, color: 'white', fontWeight: 'bold', background: '#0E111B'}} align="right">
+                                <div className='closeButton' onClick={() => removeAsset(index)}>
+                                    <CloseIcon fontSize="small"/>
+                                </div>
                             </TableCell>
                             </TableRow>
                             

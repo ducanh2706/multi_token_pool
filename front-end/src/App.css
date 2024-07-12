@@ -477,3 +477,34 @@ header {
   font-size: 14px;
   padding-right: 8px;
 }
+
+
+.closeButton {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #243056; 
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  border-radius:20px;
+  color: #5981F3;
+  font-weight: bold;
+  transition: 0.3s;
+}
+
+.closeButton[disabled] {
+  background-color: #243056;
+  opacity: 0.4;
+  color: #5982f39b;
+}
+
+.closeButton[disabled]:hover {
+  cursor: not-allowed;
+  background-color: #243056;
+}
+
+.closeButton:hover {
+  cursor: pointer;
+  background-color: #3b4874
+}
